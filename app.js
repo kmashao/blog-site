@@ -3,9 +3,11 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
+const mongoose = require("mongoose");
 var _ = require("lodash");
 
-const posts = [];
+
+mongoose.connect("mongodb+srv://admin-kmashao:iamadmin@todolist-tilof.gcp.mongodb.net/blogdb", {useNewUrlParser: true, useUnifiedTopology:true, useFindAndModify: false });
 
 const homeStartingContent =
   "Lacus vel facilisis volutpat est velit egestas dui id ornare. Semper auctor neque vitae tempus quam. Sit amet cursus sit amet dictum sit amet justo. Viverra tellus in hac habitasse. Imperdiet proin fermentum leo vel orci porta. Donec ultrices tincidunt arcu non sodales neque sodales ut. Mattis molestie a iaculis at erat pellentesque adipiscing. Magnis dis parturient montes nascetur ridiculus mus mauris vitae ultricies. Adipiscing elit ut aliquam purus sit amet luctus venenatis lectus. Ultrices vitae auctor eu augue ut lectus arcu bibendum at. Odio euismod lacinia at quis risus sed vulputate odio ut. Cursus mattis molestie a iaculis at erat pellentesque adipiscing.";
@@ -16,61 +18,99 @@ const contactContent =
 
 const app = express();
 
+var db = mongoose.connection;
+
 app.set("view engine", "ejs");
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-app.get("/", (req, res) => {
-  res.render("home", { startContent: homeStartingContent, posts: posts });
-});
+db.on("error",console.error.bind(console, "connection error"));
+db.once("open", () => {
 
-app.get("/about", (req, res) => {
-  res.render("about", {aboutContent: aboutContent});
-});
+  console.log("connected to database");
 
-app.get("/contact", (req, res) => {
-  res.render("contact", {contactContent: contactContent});
-});
+  const blogSchema = new mongoose.Schema({
+    title: {
+      type: String,
+      min: [5, "Title minimum characters - 5"],
+      required: [true, "Title not provided"]
+    },
+    content: {
+      type: String,
+      min: [10, "minimum blog characters - 10"],
+      required: [true, "blog content not provided"]
+    }
+  })
 
-app.get("/compose", (req, res) => {
-  res.render("compose");
-});
+  const Blog = mongoose.model("blog",blogSchema);
 
-app.get("/posts/:postTitle", (req, res) => {
+  app.get("/", (req, res) => {
+    Blog.find({}, (err, posts) => {
+      if(err)
+        console.error(err)
+      else
+      res.render("home", { startContent: homeStartingContent, posts : posts });
+    })
+    
+  });
+
+  app.get("/about", (req, res) => {
+    res.render("about", {aboutContent: aboutContent});
+  });
+
+  app.get("/contact", (req, res) => {
+    res.render("contact", {contactContent: contactContent});
+  });
+
+  app.get("/compose", (req, res) => {
+    res.render("compose");
+  });
+
+  app.get("/posts/:postTitle", (req, res) => {
+
+    if (_.isEmpty(posts)) {
+      res.redirect("/");
+    } else {
+      const postTitle = _.lowerCase(req.params.postTitle);
+    
+      posts.forEach(post => {
+        let title = _.lowerCase(post.title);
+      
+        if (title === postTitle) {
+          res.render("post", {
+            title: post.title,
+            content: post.content
+          });
+        }else res.redirect("/");
+      });
+    }
+  });
+
+  app.post("/compose", (req, res) => {
+    const title = req.body.postTitle;
+    const content = req.body.content;
+      
+      const posts = new Blog({
+        title: title,
+        content: content
+      })
   
-  if (_.isEmpty(posts)) {
-    res.redirect("/");
-  } else {
-    const postTitle = _.lowerCase(req.params.postTitle);
+      posts.save((err, post,) => {
+        if (!err){
+          console.log("added new blog post\n");
+          console.log(post);
+          res.redirect("/");
+        }else
+          {
+            console.error(err);
+            res.redirect("/compose");}
+      });
+      
+  });
 
-    posts.forEach(post => {
-      let title = _.lowerCase(post.title);
+  app.listen(3000, function() {
+    console.log("Server started on port 3000");
+  });
 
-      if (title === postTitle) {
-        res.render("post", {
-          title: post.title,
-          content: post.content
-        });
-      }else res.redirect("/");
-    });
-  }
-});
-
-app.post("/compose", (req, res) => {
-  const title = req.body.postTitle;
-  const content = req.body.content;
-
-  if (title && content) {
-    const post = {
-      title: title,
-      content: content
-    };
-    posts.push(post);
-    res.redirect("/");
-  } else res.redirect("/compose");
-});
-
-app.listen(3000, function() {
-  console.log("Server started on port 3000");
-});
+})
