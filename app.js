@@ -107,7 +107,12 @@ db.once("open", () => {
     });
   });
 
-  app.listen(3000, function () {
+  let port = process.env.PORT;
+    if (_.isEmpty(port)) {
+        port = 3000;
+    }
+
+  app.listen(port, function () {
     console.log("Server started on port 3000");
   });
 });
